@@ -1,60 +1,68 @@
-# Stereo-Collision-Warning
+<div align="center">
 
-**Stereo-vision collision and tailgating warnings that run in real time on an edge chip.**
+<p><img src="assets/banner.svg" width="100%" alt="Stereo-Collision-Warning. A dashcam view where every road user is drawn twice, red for the left camera and cyan for the right; nearer vehicles split further apart. The car ahead is boxed in yellow: 2.6 s to collision, 13 m ahead, closing at 5 m/s."></p>
 
-Two cameras give metric depth. A detector and tracker follow every vehicle, pedestrian, motorbike and animal ahead. A Kalman filter turns noisy distances into closing speed and time-to-collision, and a small rule engine decides when to warn the driver. The whole loop runs in C++ with INT8 models and is profiled on the Qualcomm QCS6490.
+<p><img src="assets/stack.svg" width="94%" alt="Python 3.10+, PyTorch, OpenCV, C++17, ONNX Runtime, INT8 on Qualcomm QCS6490, MIT license"></p>
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-training-EE4C2C?logo=pytorch&logoColor=white)
-![OpenCV](https://img.shields.io/badge/OpenCV-stereo-5C3EE8?logo=opencv&logoColor=white)
-![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)
-![ONNX](https://img.shields.io/badge/ONNX-INT8-005CED?logo=onnx&logoColor=white)
-![Edge](https://img.shields.io/badge/Edge-Qualcomm%20QCS6490-3253DC?logo=qualcomm&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
+**[Why](#why-this-project)** &emsp; **[What's inside](#whats-inside)** &emsp; **[Pipeline](#pipeline)** &emsp; **[Results](#results)** &emsp; **[How it works](#how-it-works)** &emsp; **[Get started](#getting-started)** &emsp; **[Roadmap](#roadmap)**
+
+</div>
 
 > [!NOTE]
-> **Work in progress.** Research prototype, not a safety system: never rely on it while driving. Results tables fill in as each phase lands (see the [roadmap](#roadmap)).
-
-<!-- DEMO GIF: when you have one, replace this comment with:
-<p align="center">
-  <img src="assets/demo.gif" width="820" alt="Stereo-Collision-Warning: tracked road users with distance, closing speed and time-to-collision, and a collision warning firing">
-</p>
-Aim for 10–15 s: left camera view with boxes and distance/TTC labels, the depth map beside it, and one alert firing.
--->
+> **Work in progress.** This is a research prototype, not a safety system: never rely on it while driving. The results tables fill in as each phase lands (see the [roadmap](#roadmap)).
 
 ## Why this project
 
-Commercial fleet dashcams have started adding a second forward camera for stereo vision. A single camera has to guess distance from appearance; two cameras measure it from geometry, which makes distance and closing speed (and therefore collision warnings) far more reliable. Stereo-Collision-Warning rebuilds that capability from scratch on open data and two cheap webcams, then deploys it to the QCS6490, a Qualcomm chip used in current commercial AI dashcams.
+Commercial fleet dashcams have started adding a second forward camera. One camera has to guess distance from how big things look; two cameras measure it from geometry. Nearer objects shift further between the left and right views (the banner draws that shift in red and cyan), and the shift, called disparity, converts directly into metres. Reliable distance gives reliable closing speed, and reliable closing speed gives collision warnings that drivers can trust.
 
-The interesting work is in the unglamorous parts: calibration, camera sync, measurement noise that grows with distance, keeping false alerts rare, and fitting several models into one latency budget.
+Stereo-Collision-Warning rebuilds that capability from scratch on open data and two cheap webcams, then deploys it to the QCS6490, a Qualcomm chip used in current commercial AI dashcams. The interesting work is in the unglamorous parts: calibration, camera sync, measurement noise that grows with distance, keeping false alerts rare, and fitting several models into one latency budget.
 
 ## What's inside
 
-| Area | What it does | Skills |
-|---|---|---|
-| Stereo geometry | Calibration, rectification, disparity to metric depth, with an error model the tracker reuses | Camera models, epipolar geometry, triangulation |
-| Depth showdown | Classical SGBM vs. a lightweight learned stereo network vs. a monocular model, scored against LiDAR by range | Deep stereo, evaluation design |
-| Detection + tracking | Nano YOLO fine-tuned for South Asian traffic (auto-rickshaws, motorbikes, animals) + ByteTrack | Fine-tuning, multi-object tracking |
-| Risk engine | Kalman filter per object → closing speed, TTC, headway → debounced alerts and event clips | State estimation, event logic |
-| Edge runtime | ONNX → INT8 → C++ real-time loop, profiled on a hosted QCS6490 | Quantization, latency budgets, C++ |
-| Data engine | Own stereo footage → auto-labels → hard-example mining → human review → retrain | Active learning, distribution shift |
+<table>
+<tr>
+<td width="64" valign="top"><img src="assets/icons/stereo.svg" width="52" alt=""></td>
+<td valign="top"><b>Stereo geometry</b><br>
+Calibration, rectification and metric depth, with an error model the tracker reuses.<br>
+<i>Camera models, epipolar geometry, triangulation</i></td>
+</tr>
+<tr>
+<td width="64" valign="top"><img src="assets/icons/depth.svg" width="52" alt=""></td>
+<td valign="top"><b>Depth showdown</b><br>
+Classical SGBM vs. a lightweight learned stereo network vs. a monocular model, scored against LiDAR by range.<br>
+<i>Deep stereo, evaluation design</i></td>
+</tr>
+<tr>
+<td width="64" valign="top"><img src="assets/icons/track.svg" width="52" alt=""></td>
+<td valign="top"><b>Detection and tracking</b><br>
+Nano YOLO fine-tuned for South Asian traffic (auto-rickshaws, motorbikes, animals), plus ByteTrack.<br>
+<i>Fine-tuning, multi-object tracking</i></td>
+</tr>
+<tr>
+<td width="64" valign="top"><img src="assets/icons/risk.svg" width="52" alt=""></td>
+<td valign="top"><b>Risk engine</b><br>
+A Kalman filter per object gives closing speed, time-to-collision and headway, then debounced alerts and event clips.<br>
+<i>State estimation, event logic</i></td>
+</tr>
+<tr>
+<td width="64" valign="top"><img src="assets/icons/edge.svg" width="52" alt=""></td>
+<td valign="top"><b>Edge runtime</b><br>
+ONNX, INT8 and a C++ real-time loop, profiled on a hosted Qualcomm QCS6490.<br>
+<i>Quantization, latency budgets, C++</i></td>
+</tr>
+<tr>
+<td width="64" valign="top"><img src="assets/icons/loop.svg" width="52" alt=""></td>
+<td valign="top"><b>Data engine</b><br>
+Own stereo footage, auto-labels, hard-example mining, human review, retraining.<br>
+<i>Active learning, distribution shift</i></td>
+</tr>
+</table>
 
 ## Pipeline
 
-```mermaid
-flowchart LR
-    L["Left frame"] --> P["Pair by timestamp<br/>+ rectify"]
-    R["Right frame"] --> P
-    P --> D["Stereo depth<br/>SGBM or learned"]
-    P --> DET["Detector<br/>YOLO nano, INT8"]
-    DET --> TRK["Tracker<br/>ByteTrack"]
-    D --> DIST["Per-object distance<br/>robust median in box"]
-    TRK --> DIST
-    DIST --> KF["Kalman filter<br/>distance + range rate"]
-    KF --> RISK["Risk engine<br/>TTC · headway · in-path"]
-    EGO["Ego speed<br/>GPS or OXTS"] --> RISK
-    RISK --> OUT["Alerts + event clips"]
-```
+<p><img src="assets/pipeline.svg" width="100%" alt="Pipeline. Left and right camera frames are paired and rectified, then go to stereo depth and to detection and tracking. Both feed a per-object distance, which a Kalman filter turns into distance and closing speed per track. The risk engine adds ego speed to compute time-to-collision, headway and an in-path check, then raises collision and tailgating warnings, which save event clips."></p>
+
+Red and cyan always mean the left and right camera. Yellow is reserved for warnings.
 
 ## Results
 
@@ -90,7 +98,7 @@ Measured numbers are filled in from `notebooks/` as each phase completes. The on
 
 ### Data engine (own Pakistani-road test set)
 
-| Round | Hand-labeled frames | Auto-labeled frames | mAP50 (all) | mAP50 (rickshaw · motorbike · animal) | False alerts / hr |
+| Round | Hand-labeled frames | Auto-labeled frames | mAP50 (all) | mAP50 (rickshaw, motorbike, animal) | False alerts / hr |
 |---|---:|---:|---:|---|---:|
 | 0: IDD only | 0 | 0 | — | — | — |
 | 1 | — | — | — | — | — |
@@ -117,14 +125,23 @@ Differentiating gives the error model:
 
 $$\Delta Z \approx \frac{Z^2}{f \cdot B}\,\Delta d$$
 
-Depth error grows with the **square** of distance, so baseline and focal length matter a lot:
+Depth error grows with the **square** of distance, so baseline and focal length matter a lot. At a 2-second gap on a 90 km/h road, a 15 cm webcam rig is uncertain by almost three times as much as KITTI's 54 cm rig:
 
-| Rig | f (px) | Baseline | Error at 20 m | At 40 m | At 60 m |
-|---|---:|---:|---:|---:|---:|
-| KITTI | 721 | 0.54 m | 0.26 m | 1.03 m | 2.31 m |
-| Webcam rig (720p, ~70° HFOV) | ~900 | 0.15 m | 0.74 m | 2.96 m | 6.67 m |
+<p><img src="assets/depth-error.svg" width="100%" alt="Line chart of theoretical stereo depth error from 0 to 60 m. Webcam rig, f 900 px and 15 cm baseline: ±0.74 m at 20 m, ±2.96 m at 40 m, ±4.6 m at 50 m, ±6.67 m at 60 m. KITTI rig, f 721 px and 54 cm baseline: ±0.26 m at 20 m, ±1.03 m at 40 m, ±1.6 m at 50 m, ±2.31 m at 60 m."></p>
+
+<details>
+<summary><b>Exact values</b></summary>
+
+<br>
+
+| Rig | f (px) | Baseline | Error at 20 m | At 40 m | At 50 m | At 60 m |
+|---|---:|---:|---:|---:|---:|---:|
+| KITTI | 721 | 0.54 m | 0.26 m | 1.03 m | 1.61 m | 2.31 m |
+| Webcam rig (720p, ~70° HFOV) | ~900 | 0.15 m | 0.74 m | 2.96 m | 4.63 m | 6.67 m |
 
 *Assumes ±0.25 px disparity error. The disparity search range sets the closest measurable distance, `Z_min = f * B / d_max`: about 2 m for KITTI with 192 levels, about 1 m for the webcam rig with 128.*
+
+</details>
 
 The same model sets the tracker's measurement noise, so far-away objects are trusted less:
 
@@ -132,7 +149,7 @@ $$\sigma_Z(Z) = \frac{Z^2}{f \cdot B}\,\sigma_d$$
 
 ### 2. Distance per object
 
-Depth inside a bounding box mixes the object with road and background. Stereo-Collision-Warning takes the median of valid depth values in the box's lower-central region (inner half of the width, 40–90 % of the height) and drops outliers beyond 3 MAD. Lateral position comes for free: `X = (u - c_x) * Z / f`.
+Depth inside a bounding box mixes the object with road and background. The system takes the median of valid depth values in the box's lower-central region (inner half of the width, 40–90 % of the height) and drops outliers beyond 3 MAD. Lateral position comes for free: `X = (u - c_x) * Z / f`.
 
 ### 3. Tracking and state estimation
 
@@ -150,8 +167,11 @@ ByteTrack assigns IDs. Each track then gets a constant-velocity Kalman filter ov
 - **Hysteresis and per-track cooldown,** so alerts don't flicker or repeat
 - **Event clips:** a ring buffer saves 5 s before and after each alert, plus a JSON record (track ID, distance, TTC, ego speed)
 
+<details>
+<summary><b>Alert settings</b> (<code>configs/alerts.yaml</code>)</summary>
+
 ```yaml
-# configs/alerts.yaml (starting points; tune on your own footage)
+# Starting points; tune on your own footage
 in_path:
   corridor_half_width_m: 1.5
 fcw:
@@ -168,17 +188,22 @@ event_clip:
   post_s: 5
 ```
 
+</details>
+
 ### 5. Edge deployment
 
 1. Export the detector and the learned stereo network to ONNX.
 2. Quantize to INT8 with ONNX Runtime static (QDQ) quantization, calibrated on about 500 frames of my own footage, then re-measure accuracy.
 3. Compile and profile on a hosted QCS6490 through Qualcomm AI Hub.
-4. Run the C++ runtime: capture threads → frame pairing → inference (ONNX Runtime) → tracker → risk engine, connected by bounded queues so a slow stage drops frames instead of building lag.
+4. Run the C++ runtime: capture threads, frame pairing, inference (ONNX Runtime), tracker and risk engine, connected by bounded queues so a slow stage drops frames instead of building lag.
 
 Stereo networks often use operations (cost volumes, warping) that fall back to the CPU on mobile NPUs. If that happens, the results say so and SGBM stays the on-device depth path.
 
+<details>
+<summary><b>Profiling on the QCS6490</b> (<code>edge/aihub_profile.py</code>)</summary>
+
 ```python
-# Core of edge/aihub_profile.py, written against qai-hub 0.56 (check the docs if a call has changed)
+# Written against qai-hub 0.56; check the docs if a call has changed
 import numpy as np
 import qai_hub as hub
 
@@ -201,17 +226,11 @@ client.submit_inference_job(
 )
 ```
 
+</details>
+
 ### 6. Data engine
 
-```mermaid
-flowchart LR
-    A["Record + pair frames"] --> B["Auto-label<br/>Grounding DINO"]
-    B --> C["Mine hard frames<br/>uncertain · disagreeing · flickering"]
-    C --> D["Human review<br/>CVAT"]
-    D --> E["Retrain detector"]
-    E --> F["Evaluate on a fixed<br/>hand-labeled test set"]
-    F -->|next round| A
-```
+<p><img src="assets/data-engine.svg" width="100%" alt="Data engine loop drawn as a clockwise roundabout with six stations: 1 record, 2 auto-label with Grounding DINO, 3 mine hard frames, 4 review by hand in CVAT, 5 retrain the detector, 6 evaluate on a fixed hand-labeled test set, then back to recording."></p>
 
 - **Auto-labeling:** Grounding DINO with text prompts such as auto rickshaw, motorcycle, truck, cow and donkey cart.
 - **Mining:** keep frames where detector confidence sits in the uncertain band (0.3–0.6), where the detector and the auto-labeler disagree, or where a track flickers on and off.
@@ -236,31 +255,7 @@ Raw data is never committed. Scripts in `tools/` prepare each dataset after you 
 - A phone logging timestamped GPS for ego speed
 - A laptop for recording, run by a passenger
 
-**Synchronization:** USB webcams are not hardware-synced. At 50 km/h, a 20 ms gap between left and right frames means the car moves about 0.28 m between the two exposures. Stereo-Collision-Warning timestamps every frame on arrival, pairs nearest neighbors, and drops pairs more than 10 ms apart (configurable). To measure your real offset, film a millisecond timer on a screen with both cameras.
-
-## Repository layout
-
-```text
-stereo-collision-warning/
-├── scw/                    # Python package
-│   ├── sources/            # camera capture, frame pairing, KITTI and CARLA loaders
-│   ├── depth/              # SGBM, learned stereo, monocular baseline
-│   ├── detect/             # detector wrapper and fine-tuning scripts
-│   ├── track/              # ByteTrack integration
-│   ├── risk/               # Kalman filter, TTC, headway, alert state machine
-│   ├── data_engine/        # auto-labeling, hard-example mining, dataset versions
-│   ├── eval/               # depth, detection, tracking and alert metrics
-│   └── run.py              # end-to-end demo entry point
-├── cpp/                    # real-time C++ runtime (ONNX Runtime)
-├── edge/                   # ONNX export, INT8 quantization, AI Hub profiling
-├── calib/                  # checkerboard capture and stereo calibration
-├── configs/                # rig, model and alert settings (YAML)
-├── tools/                  # dataset prep, recording, anonymization, visualization
-├── notebooks/              # analysis that produces the README tables and plots
-├── tests/                  # unit tests: geometry, Kalman filter, alert logic
-├── assets/                 # demo GIF and figures
-└── README.md
-```
+**Synchronization:** USB webcams are not hardware-synced. At 50 km/h, a 20 ms gap between left and right frames means the car moves about 0.28 m between the two exposures. The recorder timestamps every frame on arrival, pairs nearest neighbors, and drops pairs more than 10 ms apart (configurable). To measure your real offset, film a millisecond timer on a screen with both cameras.
 
 ## Getting started
 
@@ -282,14 +277,18 @@ python tools/prepare_kitti.py --root data/kitti
 python -m scw.run --source kitti --drive 2011_09_26_drive_0005 --depth sgbm --show
 ```
 
-### Evaluate
+<details>
+<summary><b>Evaluate</b></summary>
 
 ```bash
 python -m scw.eval.depth  --split kitti_val --methods sgbm,learned_stereo,mono
 python -m scw.eval.alerts --footage data/own/normal_driving --out reports/alerts.md
 ```
 
-### Calibrate your own rig
+</details>
+
+<details>
+<summary><b>Calibrate your own rig</b></summary>
 
 ```bash
 python calib/capture_pairs.py    --left 0 --right 1 --out calib/captures
@@ -299,7 +298,10 @@ python calib/calibrate_stereo.py --images calib/captures --board 9x6 --square-mm
 
 Aim for an RMS reprojection error below about 0.5 px, and recapture if it is higher.
 
-### Build for the edge
+</details>
+
+<details>
+<summary><b>Build for the edge</b></summary>
 
 ```bash
 python edge/export_onnx.py   --model detector --out build/detector.onnx
@@ -311,6 +313,35 @@ cmake -S cpp -B build/cpp -DCMAKE_BUILD_TYPE=Release
 cmake --build build/cpp -j
 ./build/cpp/scw_rt --config configs/rig_webcam.yaml
 ```
+
+</details>
+
+<details>
+<summary><b>Repository layout</b></summary>
+
+```text
+stereo-collision-warning/
+├── scw/                    # Python package
+│   ├── sources/            # camera capture, frame pairing, KITTI and CARLA loaders
+│   ├── depth/              # SGBM, learned stereo, monocular baseline
+│   ├── detect/             # detector wrapper and fine-tuning scripts
+│   ├── track/              # ByteTrack integration
+│   ├── risk/               # Kalman filter, TTC, headway, alert state machine
+│   ├── data_engine/        # auto-labeling, hard-example mining, dataset versions
+│   ├── eval/               # depth, detection, tracking and alert metrics
+│   └── run.py              # end-to-end demo entry point
+├── cpp/                    # real-time C++ runtime (ONNX Runtime)
+├── edge/                   # ONNX export, INT8 quantization, AI Hub profiling
+├── calib/                  # checkerboard capture and stereo calibration
+├── configs/                # rig, model and alert settings (YAML)
+├── tools/                  # dataset prep, recording, anonymization, visualization
+├── notebooks/              # analysis that produces the README tables and plots
+├── tests/                  # unit tests: geometry, Kalman filter, alert logic
+├── assets/                 # banner, diagrams, chart and icons for this README
+└── README.md
+```
+
+</details>
 
 ## Evaluation protocol
 
@@ -330,6 +361,11 @@ cmake --build build/cpp -j
 - **Near misses come from simulation.** They can't be staged safely on real roads.
 
 ## Roadmap
+
+<p><img src="assets/roadmap.svg" width="100%" alt="Nine-week roadmap: core pipeline on KITTI in weeks 1 to 3, edge deployment in weeks 4 and 5, own data in weeks 6 to 8, polish and publish in week 9. After week 9: lane segmentation, speed-limit sign reading, a driver-facing module."></p>
+
+<details>
+<summary><b>Checklist</b></summary>
 
 **Phase 1: core pipeline on KITTI (weeks 1–3)**
 - [ ] Rectification, SGBM depth, LiDAR evaluation by range
@@ -359,6 +395,8 @@ cmake --build build/cpp -j
 - [ ] Speed-limit sign detection and reading, fused with GPS speed
 - [ ] Driver-facing module: phone use and drowsiness
 
+</details>
+
 ## Safety, privacy and licensing
 
 - **Not a safety system.** Stereo-Collision-Warning is a research prototype. Don't rely on its alerts.
@@ -374,6 +412,9 @@ _Notes from each phase will go here._
 
 ## References
 
+<details>
+<summary><b>Papers and docs</b></summary>
+
 1. A. Geiger, P. Lenz, R. Urtasun. *Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite.* CVPR 2012.
 2. M. Menze, A. Geiger. *Object Scene Flow for Autonomous Vehicles.* CVPR 2015.
 3. H. Hirschmüller. *Stereo Processing by Semiglobal Matching and Mutual Information.* IEEE TPAMI, 2008.
@@ -386,8 +427,14 @@ _Notes from each phase will go here._
 10. R. E. Kalman. *A New Approach to Linear Filtering and Prediction Problems.* Journal of Basic Engineering, 1960.
 11. [Qualcomm AI Hub documentation](https://workbench.aihub.qualcomm.com/docs/) and [ONNX Runtime quantization guide](https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html).
 
-## Author
+</details>
 
-**Your Name** · [LinkedIn](https://www.linkedin.com/in/your-handle) · [GitHub](https://github.com/your-username)
+---
 
-Licensed under the MIT License. See [LICENSE](LICENSE).
+<div align="center">
+
+**Your Name** &emsp; [LinkedIn](https://www.linkedin.com/in/your-handle) &emsp; [GitHub](https://github.com/your-username)
+
+Released under the [MIT License](LICENSE).
+
+</div>
